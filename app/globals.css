@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #030303;
+  --color-foreground: #FFFFFF;
+  --color-noble-gold: #B1976B;
+  --color-noble-border: #1A1A1A;
+  
+  --font-serif: "Cinzel", serif;
+  --font-sans: "Inter", sans-serif;
+}
+
+:root {
+  --background: #030303;
+  --foreground: #FFFFFF;
+  --noble-gold: #B1976B;
+  --noble-border: #1A1A1A;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Custom transitions and glassmorphism */
+.glass {
+  background: rgba(26, 26, 26, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--noble-border);
+}
+
+.gold-text {
+  color: var(--noble-gold);
+  text-shadow: 0 0 10px rgba(177, 151, 107, 0.4);
+}
+
+.gold-border {
+  border-color: var(--noble-gold);
+}
