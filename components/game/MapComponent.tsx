@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { MapContainer, ImageOverlay, Marker, Popup } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -15,7 +16,9 @@ const DefaultIcon = L.icon({
 })
 L.Marker.prototype.options.icon = DefaultIcon
 
-const WESTEROS_MAP_URL = "https://awoiaf.westeros.org/images/2/2e/Westeros_political.png"
+import { HOUSES, getHouse } from "@/lib/gameData"
+
+const WESTEROS_MAP_URL = "/westeros.svg"
 const BOUNDS: L.LatLngBoundsExpression = [[0, 0], [1000, 800]]
 
 interface Profile {
@@ -51,6 +54,14 @@ export default function MapComponent({
     performAction,
     distance
 }: MapComponentProps) {
+    // Force map resize to ensure tiles load correctly
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [])
+
     return (
         <>
             <div className="flex-grow relative h-full w-full overflow-hidden">
@@ -69,33 +80,52 @@ export default function MapComponent({
                         opacity={0.8}
                     />
 
-                    {players.map((player) => (
-                        <Marker
-                            key={player.id}
-                            position={[player.y, player.x]}
-                            eventHandlers={{ click: () => handleSelectTarget(player) }}
-                            icon={player.faction === 'whitewalker' ? L.divIcon({
-                                className: 'custom-div-icon',
-                                html: `<div style="background: #a5f3fc; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 10px #06b6d4; border: 2px solid white;"></div>`,
-                                iconSize: [12, 12],
-                                iconAnchor: [6, 6]
-                            }) : undefined}
-                        >
-                            <Popup className="custom-popup">
-                                <div className="text-center p-1">
-                                    <div className={`font-serif uppercase ${player.faction === 'whitewalker' ? 'text-cyan-400 animate-pulse' : 'text-[#B1976B]'}`}>
-                                        {player.pseudo} {player.is_bot && <span className="text-[6px] opacity-70">(IA)</span>}
+                    {players.map((player) => {
+                        const houseData = getHouse(player.house.toLowerCase()) || {
+                            id: 'unknown', name: 'Inconnu', motto: '...', color: '#6d5e46', icon: '🛡️', seat: 'Inconnu', description: 'Une maison mineure.', region: 'Unknown'
+                        }
+                        const isWW = player.faction === 'whitewalker'
+
+                        return (
+                            <Marker
+                                key={player.id}
+                                position={[player.y, player.x]}
+                                eventHandlers={{ click: () => handleSelectTarget(player) }}
+                                icon={L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div style="
+                                    background: ${isWW ? '#a5f3fc' : houseData.color};
+                                    width: ${isWW ? '12px' : '16px'}; 
+                                    height: ${isWW ? '12px' : '16px'}; 
+                                    border-radius: 50%; 
+                                    box-shadow: 0 0 10px ${isWW ? '#06b6d4' : houseData.color}; 
+                                    border: 2px solid white;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 8px;
+                                ">${isWW ? '' : houseData.icon}</div>`,
+                                    iconSize: [16, 16],
+                                    iconAnchor: [8, 8]
+                                })}
+                            >
+                                <Popup className="custom-popup">
+                                    <div className="text-center p-1">
+                                        <div className={`font-serif uppercase ${isWW ? 'text-cyan-400 animate-pulse' : 'text-[#B1976B]'} ${!isWW && 'gold-text'}`}>
+                                            {player.pseudo} {player.is_bot && <span className="text-[6px] opacity-70">(IA)</span>}
+                                        </div>
+                                        {!isWW && <div className="text-[6px] text-gray-400 uppercase tracking-widest mb-1">{houseData.name}</div>}
+                                        <div className="text-[8px] uppercase tracking-tighter text-gray-500">
+                                            {player.soldiers || 0} {isWW ? 'Spectres ❄️' : 'Épées ⚔️'}
+                                        </div>
+                                        {player.is_rebel && (
+                                            <div className="text-[6px] text-red-500 font-bold uppercase mt-1">Séditieux / Hors-la-loi</div>
+                                        )}
                                     </div>
-                                    <div className="text-[8px] uppercase tracking-tighter text-gray-500">
-                                        {player.house} | {player.soldiers || 0} {player.faction === 'whitewalker' ? 'Spectres ❄️' : '⚔️'}
-                                    </div>
-                                    {player.is_rebel && (
-                                        <div className="text-[6px] text-red-500 font-bold uppercase mt-1">Séditieux / Hors-la-loi</div>
-                                    )}
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
+                                </Popup>
+                            </Marker>
+                        )
+                    })}
                 </MapContainer>
             </div>
 
@@ -104,41 +134,78 @@ export default function MapComponent({
                 <motion.div
                     initial={{ y: 200 }}
                     animate={{ y: 0 }}
-                    className="absolute bottom-16 left-4 right-4 z-[1000] glass p-5 border-t-2 border-t-[#B1976B]"
+                    className="absolute bottom-16 left-4 right-4 z-[1000]"
                 >
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <div className="text-[10px] text-[#B1976B] uppercase tracking-[0.2em] mb-1">Cible Diplomatique</div>
-                            <div className="text-xl font-serif uppercase leading-none">{selectedTarget.pseudo}</div>
-                            <div className="text-[10px] text-gray-500 italic mt-1 leading-none">Armée : {selectedTarget.soldiers || 0} hommes</div>
-                        </div>
-                        <button onClick={() => setSelectedTarget(null)} className="text-gray-500 p-2"><X className="w-4 h-4" /></button>
-                    </div>
+                    {(() => {
+                        const house = getHouse(selectedTarget.house.toLowerCase())
+                        const isWW = selectedTarget.faction === 'whitewalker'
 
-                    <div className="grid grid-cols-4 gap-2">
-                        <button onClick={() => performAction('siege')} className="flex flex-col items-center justify-center p-2 border border-red-900/50 hover:bg-red-900/10 transition-colors">
-                            <Sword className="w-5 h-5 text-red-500 mb-1" />
-                            <span className="text-[8px] uppercase font-bold text-gray-400">Assiéger</span>
-                        </button>
-                        <button onClick={() => performAction('bribe')} className="flex flex-col items-center justify-center p-2 border border-[#B1976B]/30 hover:bg-[#B1976B]/10">
-                            <Ban className="w-5 h-5 text-yellow-600 mb-1" />
-                            <span className="text-[8px] uppercase font-bold text-gray-400">Soudoyer</span>
-                        </button>
-                        <button onClick={() => performAction('infiltrate')} className="flex flex-col items-center justify-center p-2 border border-purple-900/30 hover:bg-purple-900/10">
-                            <Eye className="w-5 h-5 text-purple-500 mb-1" />
-                            <span className="text-[8px] uppercase font-bold text-gray-400">Infiltrer</span>
-                        </button>
-                        <button onClick={() => performAction('marriage')} className="flex flex-col items-center justify-center p-2 border border-pink-900/30 hover:bg-pink-900/10">
-                            <Heart className="w-5 h-5 text-pink-500 mb-1" />
-                            <span className="text-[8px] uppercase font-bold text-gray-400">Mariage</span>
-                        </button>
-                    </div>
+                        return (
+                            <div className="glass p-0 overflow-hidden border-[#B1976B] border rounded-lg shadow-2xl bg-black/90">
+                                {/* Header / Banner */}
+                                <div className="relative h-24 overflow-hidden">
+                                    <div className="absolute inset-0 opacity-50" style={{ backgroundColor: house?.color || '#333' }} />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+                                    <div className="absolute bottom-3 left-4 flex items-end gap-3">
+                                        <div className="text-4xl filter drop-shadow-lg">{isWW ? '❄️' : house?.icon || '🛡️'}</div>
+                                        <div>
+                                            <div className="text-[10px] text-white/70 uppercase tracking-widest">{isWW ? 'Menace' : `Maison ${house?.name || selectedTarget.house}`}</div>
+                                            <h2 className="text-2xl font-serif text-white uppercase leading-none tracking-wide text-shadow-sm">{selectedTarget.pseudo}</h2>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedTarget(null)} className="absolute top-2 right-2 text-white/50 hover:text-white p-2 bg-black/20 rounded-full"><X className="w-4 h-4" /></button>
+                                </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#1A1A1A] text-center">
-                        <p className="text-[8px] text-gray-600 uppercase tracking-widest italic">
-                            Distance: {distance} Lieues | Trajet estimé: {Math.round((distance || 0) * 2)} minutes
-                        </p>
-                    </div>
+                                {/* Stats & Info */}
+                                <div className="p-4 grid grid-cols-2 gap-4 border-b border-white/10">
+                                    <div className="space-y-1">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Devise</div>
+                                        <div className="text-xs text-[#B1976B] italic font-serif">"{house?.motto || 'L\'Hiver Vient...'}"</div>
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Forces</div>
+                                        <div className="text-xs text-white font-bold">{selectedTarget.soldiers || 0} <span className="text-gray-500 font-normal">{isWW ? 'Spectres' : 'Hommes'}</span></div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Siège</div>
+                                        <div className="text-xs text-gray-300">{house?.seat || 'Inconnu'}</div>
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Trésor</div>
+                                        <div className="text-xs text-[#B1976B]">{selectedTarget.gold || 0} <span className="text-[8px]">Dragons d'Or</span></div>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="p-3 bg-[#0A0A0A]">
+                                    <div className="text-[8px] text-gray-600 uppercase tracking-[0.2em] text-center mb-3">Actions Diplomatiques</div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <button onClick={() => performAction('siege')} className="group flex flex-col items-center justify-center p-3 rounded bg-red-900/10 border border-red-900/30 hover:bg-red-900/30 transition-all">
+                                            <Sword className="w-5 h-5 text-red-500 mb-1 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[7px] uppercase font-bold text-red-400 group-hover:text-red-300">Guerre</span>
+                                        </button>
+                                        <button onClick={() => performAction('bribe')} className="group flex flex-col items-center justify-center p-3 rounded bg-yellow-900/10 border border-yellow-900/30 hover:bg-yellow-900/30 transition-all">
+                                            <Ban className="w-5 h-5 text-yellow-600 mb-1 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[7px] uppercase font-bold text-yellow-500 group-hover:text-yellow-400">Corruption</span>
+                                        </button>
+                                        <button onClick={() => performAction('infiltrate')} className="group flex flex-col items-center justify-center p-3 rounded bg-purple-900/10 border border-purple-900/30 hover:bg-purple-900/30 transition-all">
+                                            <Eye className="w-5 h-5 text-purple-500 mb-1 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[7px] uppercase font-bold text-purple-400 group-hover:text-purple-300">Espionner</span>
+                                        </button>
+                                        <button onClick={() => performAction('marriage')} className="group flex flex-col items-center justify-center p-3 rounded bg-pink-900/10 border border-pink-900/30 hover:bg-pink-900/30 transition-all">
+                                            <Heart className="w-5 h-5 text-pink-500 mb-1 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[7px] uppercase font-bold text-pink-400 group-hover:text-pink-300">Alliance</span>
+                                        </button>
+                                    </div>
+                                    <div className="mt-3 text-center">
+                                        <p className="text-[8px] text-gray-600 uppercase tracking-widest italic">
+                                            Distance: {distance} Lieues | Marche: {Math.round((distance || 0) * 2)} min
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })()}
                 </motion.div>
             )}
 

@@ -69,26 +69,37 @@ export default function TacticalMap() {
     const spawnBots = async () => {
         if (!myProfile) return
 
-        const bots = [
-            // Famous Lords
-            { id: crypto.randomUUID(), pseudo: 'Eddard Stark', house: 'Stark', gold: 1200, soldiers: 500, x: 200, y: 700, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Tywin Lannister', house: 'Lannister', gold: 5000, soldiers: 800, x: 150, y: 350, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Stannis Baratheon', house: 'Baratheon', gold: 800, soldiers: 400, x: 650, y: 380, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Mace Tyrell', house: 'Tyrell', gold: 3000, soldiers: 600, x: 180, y: 150, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Balon Greyjoy', house: 'Greyjoy', gold: 400, soldiers: 350, x: 50, y: 500, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Oberyn Martell', house: 'Martell', gold: 1500, soldiers: 300, x: 500, y: 50, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Roose Bolton', house: 'Bolton', gold: 700, soldiers: 400, x: 350, y: 750, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-            { id: crypto.randomUUID(), pseudo: 'Walder Frey', house: 'Frey', gold: 1000, soldiers: 200, x: 250, y: 550, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+        try {
+            const bots = [
+                // Famous Lords
+                { id: crypto.randomUUID(), pseudo: 'Eddard Stark', house: 'stark', gold: 1200, soldiers: 500, x: 200, y: 700, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Tywin Lannister', house: 'lannister', gold: 5000, soldiers: 800, x: 150, y: 350, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Stannis Baratheon', house: 'baratheon', gold: 800, soldiers: 400, x: 650, y: 380, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Mace Tyrell', house: 'tyrell', gold: 3000, soldiers: 600, x: 180, y: 150, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Balon Greyjoy', house: 'greyjoy', gold: 400, soldiers: 350, x: 50, y: 500, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Oberyn Martell', house: 'martell', gold: 1500, soldiers: 300, x: 500, y: 50, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Roose Bolton', house: 'bolton', gold: 700, soldiers: 400, x: 350, y: 750, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Walder Frey', house: 'frey', gold: 1000, soldiers: 200, x: 250, y: 550, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
 
-            // White Walkers (The Threat from the North)
-            { id: crypto.randomUUID(), pseudo: 'Le Roi de la Nuit', house: 'Marcheurs Blancs', gold: 0, soldiers: 5000, x: 400, y: 950, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
-            { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #1', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 500, y: 900, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
-            { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #2', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 300, y: 920, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
-        ]
+                // White Walkers (The Threat from the North)
+                { id: crypto.randomUUID(), pseudo: 'Le Roi de la Nuit', house: 'Marcheurs Blancs', gold: 0, soldiers: 5000, x: 400, y: 950, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
+                { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #1', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 500, y: 900, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
+                { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #2', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 300, y: 920, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
+            ]
 
-        await supabase.from('profiles').insert(bots)
-        fetchData()
-        setActionNotif("L'Hiver est arrivé. Les Seigneurs de Westeros et les Spectres du Nord s'éveillent.")
+            const { error } = await supabase.from('profiles').insert(bots)
+            if (error) throw error
+
+            fetchData()
+            setActionNotif("L'Hiver est arrivé. Les Seigneurs de Westeros et les Spectres du Nord s'éveillent.")
+        } catch (e: any) {
+            console.error("Spawn Error:", e)
+            if (e.code === '23505') { // Unique violation
+                setActionNotif("Le Royaume est déjà peuplé (Doublons détectés).")
+            } else {
+                setActionNotif("Les Dieux Anciens empêchent l'invocation... (Erreur DB)")
+            }
+        }
     }
 
     const rebelAgainstWatch = async () => {
@@ -102,6 +113,8 @@ export default function TacticalMap() {
         if (!error) {
             setActionNotif("Vous avez brisé vos vœux ! Vous êtes désormais le Roi au-delà du Mur.")
             fetchData()
+        } else {
+            setActionNotif("Votre conscience vous retient... (Erreur technique)")
         }
     }
 
@@ -135,19 +148,26 @@ export default function TacticalMap() {
         if (!myProfile) return
         setLoadingAction(true)
 
-        // Custom logic for Night Watch collecting "supplies" instead of taxes
         const isNW = myProfile.house === 'nightwatch'
-        const rpcName = isNW ? 'collect_supplies' : 'collect_taxes'
+        // FIX: Use direct update instead of RPC to ensure it works without SQL scripts
+        const gain = isNW ? 300 : 500 // Supplies worth less/more or similar
 
-        const { error } = await supabase.rpc(rpcName, { user_id: myProfile.id })
-        if (error) {
-            setActionNotif(isNW ? "Le Don n'a plus rien à offrir..." : "Les percepteurs ont été chassés...")
-        } else {
+        try {
+            const { error } = await supabase.from('profiles')
+                .update({ gold: myProfile.gold + gain })
+                .eq('id', myProfile.id)
+
+            if (error) throw error
+
             setActionNotif(isNW ? "Les villages du Don ont envoyé des vivres." : "L'or des paysans remplit vos coffres.")
             fetchData()
+        } catch (e) {
+            console.error(e)
+            setActionNotif("Les percepteurs ont été chassés... (Erreur DB)")
+        } finally {
+            setLoadingAction(false)
+            setTimeout(() => setActionNotif(null), 3000)
         }
-        setLoadingAction(false)
-        setTimeout(() => setActionNotif(null), 3000)
     }
 
     const recruitSoldiers = async () => {
@@ -161,20 +181,28 @@ export default function TacticalMap() {
         }
 
         setLoadingAction(true)
-        const { error } = await supabase.rpc('recruit_soldiers', {
-            user_id: myProfile.id,
-            amount: isNW ? 20 : 10,
-            is_night_watch: isNW
-        })
+        const amount = isNW ? 20 : 10
+        const cost = isNW ? 0 : 100
 
-        if (error) {
-            setActionNotif(isNW ? "Aucun criminel ne veut prendre le noir." : "Personne ne veut se battre pour vous.")
-        } else {
+        try {
+            const { error } = await supabase.from('profiles')
+                .update({
+                    gold: myProfile.gold - cost,
+                    soldiers: myProfile.soldiers + amount
+                })
+                .eq('id', myProfile.id)
+
+            if (error) throw error
+
             setActionNotif(isNW ? "20 nouveaux frères jurés ont rejoint le Mur." : "10 nouveaux soldats ont prêté serment.")
             fetchData()
+        } catch (e) {
+            console.error(e)
+            setActionNotif("Personne ne veut se battre pour vous. (Erreur DB)")
+        } finally {
+            setLoadingAction(false)
+            setTimeout(() => setActionNotif(null), 3000)
         }
-        setLoadingAction(false)
-        setTimeout(() => setActionNotif(null), 3000)
     }
 
     const handleSelectTarget = (player: any) => {

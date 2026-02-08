@@ -6,23 +6,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 
-const HOUSES = [
-    { id: 'stark', name: 'Stark', motto: 'L\'hiver vient', color: '#888888', icon: '🐺', seat: 'Winterfell', description: 'Gardiens du Nord, fiers et honorables.' },
-    { id: 'lannister', name: 'Lannister', motto: 'Je rugis !', color: '#C02424', icon: '🦁', seat: 'Castral Roc', description: 'Riches et impitoyables, ils paient toujours leurs dettes.' },
-    { id: 'baratheon', name: 'Baratheon', motto: 'Nôtre est la fureur', color: '#E3B341', icon: '🦌', seat: 'Accalmie', description: 'Puissants guerriers, nés dans la tempête.' },
-    { id: 'targaryen', name: 'Targaryen', motto: 'Feu et Sang', color: '#000000', icon: '🐉', seat: 'Peyredragon', description: 'Le sang de l\'ancienne Valyria, maîtres des dragons.' },
-    { id: 'greyjoy', name: 'Greyjoy', motto: 'Nous ne semons pas', color: '#333333', icon: '🦑', seat: 'Pyke', description: 'Seigneurs des Îles de Fer, rois du sel et du roc.' },
-    { id: 'martell', name: 'Martell', motto: 'Insoumis, Invaincus, Intacts', color: '#E38041', icon: '☀️', seat: 'Lancehélion', description: 'Le venin de Dorne, brûlant sous le soleil.' },
-    { id: 'tyrell', name: 'Tyrell', motto: 'Plus haut, plus fort', color: '#2D7A2F', icon: '🌹', seat: 'Hautjardin', description: 'Maîtres des récoltes et de la chevalerie.' },
-    { id: 'nightwatch', name: 'Garde de Nuit', motto: 'Le Bouclier des Royaumes', color: '#000000', icon: '⚔️', seat: 'Châteaunoir', description: 'Le Lord Commandant protège le Mur contre les horreurs du Nord.' },
-]
-
-const CULTURES = [
-    { id: 'north', name: 'Premier Homme', bonus: '+20% Défense en Hiver' },
-    { id: 'andal', name: 'Andal', bonus: '+15% Prestige Diplomatique' },
-    { id: 'rhoynar', name: 'Rhoynar', bonus: '+25% Vitesse Navale' },
-    { id: 'valyrian', name: 'Valyrien', bonus: '+10% Puissance Militaire' },
-]
+import { HOUSES, CULTURES } from "@/lib/gameData"
 
 export default function OathPage() {
     const [step, setStep] = useState(1)
