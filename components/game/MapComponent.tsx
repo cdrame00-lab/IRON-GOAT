@@ -18,7 +18,7 @@ L.Marker.prototype.options.icon = DefaultIcon
 
 import { HOUSES, getHouse } from "@/lib/gameData"
 
-const WESTEROS_MAP_URL = "/westeros.svg"
+const WESTEROS_MAP_URL = "/westeros.webp"
 const BOUNDS: L.LatLngBoundsExpression = [[0, 0], [1000, 800]]
 
 interface Profile {

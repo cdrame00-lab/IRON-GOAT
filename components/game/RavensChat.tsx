@@ -32,23 +32,44 @@ export default function RavensChat({ isOpen, onClose, userProfile, players }: { 
     const scrollRef = useRef<HTMLDivElement>(null)
 
     const fetchMessages = useCallback(async () => {
-        let query = supabase
-            .from('messages')
-            .select('*, profiles(pseudo)')
-            .order('created_at', { ascending: true })
-            .limit(50)
-
         if (channel === 'private') {
-            // Fetch DMs where I am sender or recipient
-            query = query.or(`and(sender_id.eq.${userProfile?.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${userProfile?.id})`)
+            if (!recipientId || !userProfile) return
+
+            // Fetch private messages from private_messages table
+            const { data } = await supabase
+                .from('private_messages')
+                .select('*, sender:profiles!sender_id(pseudo), recipient:profiles!recipient_id(pseudo)')
+                .or(`and(sender_id.eq.${userProfile.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${userProfile.id})`)
+                .order('created_at', { ascending: true })
+                .limit(50)
+
+            if (data) {
+                const formatted = data.map((msg: any) => ({
+                    id: msg.id,
+                    sender_id: msg.sender_id,
+                    content: msg.content,
+                    channel: 'private',
+                    created_at: msg.created_at,
+                    sender_pseudo: msg.sender?.pseudo || 'Inconnu'
+                }))
+                setMessages(formatted)
+            }
         } else {
-            query = query.eq('channel', channel)
-        }
+            // Fetch public/secret messages
+            const { data } = await supabase
+                .from('messages')
+                .select('*, profiles(pseudo)')
+                .eq('channel', channel)
+                .order('created_at', { ascending: true })
+                .limit(50)
 
-        const { data } = await query
-
-        if (data) {
-            setMessages(data.map((m: any) => ({ ...m, sender_pseudo: m.profiles?.pseudo })))
+            if (data) {
+                const formatted = data.map((msg: any) => ({
+                    ...msg,
+                    sender_pseudo: msg.profiles?.pseudo || 'Inconnu'
+                }))
+                setMessages(formatted)
+            }
         }
     }, [channel, recipientId, userProfile?.id])
 
@@ -76,17 +97,26 @@ export default function RavensChat({ isOpen, onClose, userProfile, players }: { 
         e.preventDefault()
         if (!newMessage.trim() || !userProfile) return
 
-        const { error } = await supabase.from('messages').insert({
-            content: newMessage,
-            channel: channel,
-            sender_id: userProfile.id,
-            recipient_id: channel === 'secret' ? recipientId : null
-        })
-
-        if (!error) {
-            setNewMessage("")
-            fetchMessages()
+        if (channel === 'private') {
+            if (!recipientId) {
+                alert('Sélectionnez un destinataire')
+                return
+            }
+            await supabase.from('private_messages').insert({
+                sender_id: userProfile.id,
+                recipient_id: recipientId,
+                content: newMessage
+            })
+        } else {
+            await supabase.from('messages').insert({
+                sender_id: userProfile.id,
+                content: newMessage,
+                channel: channel
+            })
         }
+
+        setNewMessage("")
+        fetchMessages()
     }
 
     return (
@@ -119,15 +149,15 @@ export default function RavensChat({ isOpen, onClose, userProfile, players }: { 
                             Alliance
                         </button>
                         <button
-                            onClick={() => setChannel("secret")}
-                            className={`flex-1 py-3 text-[10px] uppercase tracking-widest ${channel === "secret" ? 'gold-text border-b-2 border-[#B1976B]' : 'text-gray-600'}`}
+                            onClick={() => setChannel("private")}
+                            className={`flex-1 py-3 text-[10px] uppercase tracking-widest ${channel === "private" ? 'gold-text border-b-2 border-[#B1976B]' : 'text-gray-600'}`}
                         >
-                            Secret
+                            Privé
                         </button>
                     </div>
 
                     {/* Recipient Selector for Private Messages */}
-                    {channel === 'secret' && (
+                    {channel === 'private' && (
                         <div className="p-2 border-b border-[#1A1A1A] bg-[#0A0A0A]">
                             <select
                                 className="w-full bg-[#1A1A1A] border border-gray-800 text-[10px] gold-text p-2 outline-none uppercase tracking-widest"

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { AnimatePresence, motion } from "framer-motion"
 import { Shield, Compass, MessageSquare, Eye, X, Crown } from "lucide-react"
 import RavensChat from "@/components/game/RavensChat"
+import MonarchyPanel from "@/components/game/MonarchyPanel"
 
 // We must import Leaflet components dynamically because they require 'window'
 const MapComponent = dynamic(() => import("@/components/game/MapComponent"), {
@@ -25,6 +26,10 @@ interface Profile {
     is_bot?: boolean
     faction?: 'noble' | 'nightwatch' | 'whitewalker'
     is_rebel?: boolean
+    is_monarch?: boolean
+    is_banker?: boolean
+    debt?: number
+    last_tax_paid?: string
 }
 
 interface Conflict {
@@ -44,6 +49,7 @@ export default function TacticalMap() {
     const [selectedTarget, setSelectedTarget] = useState<Profile | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
     const [isChatOpen, setIsChatOpen] = useState(false)
+    const [isMonarchyOpen, setIsMonarchyOpen] = useState(false)
     const [actionNotif, setActionNotif] = useState<string | null>(null)
     const [loadingAction, setLoadingAction] = useState(false)
     const [battleReport, setBattleReport] = useState<Conflict | null>(null)
@@ -60,7 +66,29 @@ export default function TacticalMap() {
         // Filter players by current realm key
         const realm = currentProfile?.realm_key || 'public'
         const { data: allPlayers } = await supabase.from('profiles').select('*').eq('realm_key', realm)
-        if (allPlayers) setPlayers(allPlayers)
+        if (allPlayers) {
+            setPlayers(allPlayers)
+
+            // Auto-select a monarch if none exists
+            const hasMonarch = allPlayers.some(p => p.is_monarch)
+            if (!hasMonarch && allPlayers.length > 0) {
+                // Select random player as monarch
+                const randomIndex = Math.floor(Math.random() * allPlayers.length)
+                const chosenMonarch = allPlayers[randomIndex]
+
+                await supabase.from('profiles')
+                    .update({ is_monarch: true })
+                    .eq('id', chosenMonarch.id)
+
+                console.log(`👑 ${chosenMonarch.pseudo} a été couronné Monarque du Trône de Fer !`)
+                setActionNotif(`👑 ${chosenMonarch.pseudo} de la Maison ${chosenMonarch.house} a été couronné Monarque du Trône de Fer !`)
+                setTimeout(() => setActionNotif(null), 5000)
+
+                // Refresh data to show the new monarch
+                const { data: updatedPlayers } = await supabase.from('profiles').select('*').eq('realm_key', realm)
+                if (updatedPlayers) setPlayers(updatedPlayers)
+            }
+        }
 
         const { data: activeConflicts } = await supabase.from('conflicts').select('*, profiles!conflicts_defender_id_fkey(pseudo)').eq('status', 'marching')
         if (activeConflicts) setConflicts(activeConflicts)
@@ -69,6 +97,7 @@ export default function TacticalMap() {
     const spawnBots = async () => {
         if (!myProfile) return
 
+        setLoadingAction(true)
         try {
             const bots = [
                 // Famous Lords
@@ -87,18 +116,22 @@ export default function TacticalMap() {
                 { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #2', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 300, y: 920, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
             ]
 
+            console.log('Spawning bots:', bots.length)
             const { error } = await supabase.from('profiles').insert(bots)
             if (error) throw error
 
-            fetchData()
+            await fetchData()
             setActionNotif("L'Hiver est arrivé. Les Seigneurs de Westeros et les Spectres du Nord s'éveillent.")
         } catch (e: any) {
             console.error("Spawn Error:", e)
-            if (e.code === '23505') { // Unique violation
+            if (e.code === '23505') {
                 setActionNotif("Le Royaume est déjà peuplé (Doublons détectés).")
             } else {
-                setActionNotif("Les Dieux Anciens empêchent l'invocation... (Erreur DB)")
+                setActionNotif(`Erreur d'invocation: ${e.message || 'Inconnue'}`)
             }
+        } finally {
+            setLoadingAction(false)
+            setTimeout(() => setActionNotif(null), 4000)
         }
     }
 
@@ -160,7 +193,7 @@ export default function TacticalMap() {
             if (error) throw error
 
             setActionNotif(isNW ? "Les villages du Don ont envoyé des vivres." : "L'or des paysans remplit vos coffres.")
-            fetchData()
+            await fetchData()
         } catch (e) {
             console.error(e)
             setActionNotif("Les percepteurs ont été chassés... (Erreur DB)")
@@ -195,7 +228,7 @@ export default function TacticalMap() {
             if (error) throw error
 
             setActionNotif(isNW ? "20 nouveaux frères jurés ont rejoint le Mur." : "10 nouveaux soldats ont prêté serment.")
-            fetchData()
+            await fetchData()
         } catch (e) {
             console.error(e)
             setActionNotif("Personne ne veut se battre pour vous. (Erreur DB)")
@@ -248,27 +281,34 @@ export default function TacticalMap() {
                         message = "Vous n'avez pas assez d'or pour soudoyer les gardes."
                         success = false
                     } else {
-                        // Logic: Pay 500 gold to reduce target soldiers by 20%
-                        const { error: bribeErr } = await supabase.rpc('bribe_guards', {
-                            attacker_id: myProfile.id,
-                            target_id: selectedTarget.id,
-                            cost: 500
-                        })
-                        if (bribeErr) throw bribeErr
-                        message = `Vos pièces dorées ont convaincu les gardes de ${selectedTarget.pseudo} de déserter.`
+                        // Direct DB: Pay 500 gold to reduce target soldiers by 20%
+                        const reduction = Math.floor(selectedTarget.soldiers * 0.2)
+                        await supabase.from('profiles').update({
+                            gold: myProfile.gold - 500
+                        }).eq('id', myProfile.id)
+
+                        await supabase.from('profiles').update({
+                            soldiers: Math.max(0, selectedTarget.soldiers - reduction)
+                        }).eq('id', selectedTarget.id)
+
+                        message = `Vos pièces dorées ont convaincu ${reduction} gardes de ${selectedTarget.pseudo} de déserter.`
                     }
                     break
 
                 case 'infiltrate':
-                    // Logic: 50% chance to steal 100-300 gold
-                    const { data: spyResult, error: spyErr } = await supabase.rpc('spy_mission', {
-                        attacker_id: myProfile.id,
-                        target_id: selectedTarget.id
-                    })
-                    if (spyErr) throw spyErr
+                    // Direct DB: 50% chance to steal 100-300 gold
+                    const success_chance = Math.random() > 0.5
+                    if (success_chance) {
+                        const stolen = Math.floor(Math.random() * 200) + 100
+                        await supabase.from('profiles').update({
+                            gold: myProfile.gold + stolen
+                        }).eq('id', myProfile.id)
 
-                    if (spyResult.success) {
-                        message = `Vos espions ont dérobé ${spyResult.stolen_gold} dragons d'or à ${selectedTarget.pseudo} !`
+                        await supabase.from('profiles').update({
+                            gold: Math.max(0, selectedTarget.gold - stolen)
+                        }).eq('id', selectedTarget.id)
+
+                        message = `Vos espions ont dérobé ${stolen} dragons d'or à ${selectedTarget.pseudo} !`
                     } else {
                         message = `Vos espions ont été capturés et exécutés à Port-Réal.`
                     }
@@ -286,7 +326,7 @@ export default function TacticalMap() {
             }
 
             setActionNotif(message)
-            fetchData()
+            await fetchData()
         } catch (err) {
             console.error("Action Error:", err)
             setActionNotif("Le Grand Mestre signale une erreur dans votre plan.")
@@ -446,11 +486,27 @@ export default function TacticalMap() {
                     <span className="text-[8px] uppercase text-gray-600">Ravens</span>
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-pulse" />
                 </button>
-                <button className="flex flex-col items-center gap-1">
-                    <Shield className="w-5 h-5 text-gray-500" />
-                    <span className="text-[8px] uppercase text-gray-600">Guerre</span>
+                <button onClick={() => setIsMonarchyOpen(true)} className="flex flex-col items-center gap-1">
+                    <Crown className="w-5 h-5 text-gray-500 hover:text-[#B1976B] transition-colors" />
+                    <span className="text-[8px] uppercase text-gray-600">Trône</span>
                 </button>
             </div>
+
+            {/* Monarchy Panel */}
+            <MonarchyPanel
+                isOpen={isMonarchyOpen}
+                onClose={() => setIsMonarchyOpen(false)}
+                myProfile={myProfile}
+                players={players}
+            />
+
+            {/* Ravens Chat */}
+            <RavensChat
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                userProfile={myProfile}
+                players={players}
+            />
         </div>
     )
 }
