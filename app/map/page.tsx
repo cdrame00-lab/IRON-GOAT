@@ -100,20 +100,18 @@ export default function TacticalMap() {
         setLoadingAction(true)
         try {
             const bots = [
-                // Famous Lords
-                { id: crypto.randomUUID(), pseudo: 'Eddard Stark', house: 'stark', gold: 1200, soldiers: 500, x: 200, y: 700, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Tywin Lannister', house: 'lannister', gold: 5000, soldiers: 800, x: 150, y: 350, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Stannis Baratheon', house: 'baratheon', gold: 800, soldiers: 400, x: 650, y: 380, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Mace Tyrell', house: 'tyrell', gold: 3000, soldiers: 600, x: 180, y: 150, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Balon Greyjoy', house: 'greyjoy', gold: 400, soldiers: 350, x: 50, y: 500, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Oberyn Martell', house: 'martell', gold: 1500, soldiers: 300, x: 500, y: 50, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Roose Bolton', house: 'bolton', gold: 700, soldiers: 400, x: 350, y: 750, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-                { id: crypto.randomUUID(), pseudo: 'Walder Frey', house: 'frey', gold: 1000, soldiers: 200, x: 250, y: 550, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
-
-                // White Walkers (The Threat from the North)
-                { id: crypto.randomUUID(), pseudo: 'Le Roi de la Nuit', house: 'Marcheurs Blancs', gold: 0, soldiers: 5000, x: 400, y: 950, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
-                { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #1', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 500, y: 900, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
-                { id: crypto.randomUUID(), pseudo: 'Marcheur Blanc #2', house: 'Marcheurs Blancs', gold: 0, soldiers: 1000, x: 300, y: 920, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
+                // Famous Lords - Distributed on Hex Grid (Y: 0-1500, X: 0-650)
+                { id: crypto.randomUUID(), pseudo: 'Eddard Stark', house: 'stark', gold: 1200, soldiers: 5000, x: 250, y: 300, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Tywin Lannister', house: 'lannister', gold: 8000, soldiers: 8000, x: 150, y: 900, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Robert Baratheon', house: 'baratheon', gold: 2000, soldiers: 6000, x: 400, y: 1100, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Daenerys Targaryen', house: 'targaryen', gold: 500, soldiers: 3000, x: 550, y: 1400, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Jeor Mormont', house: 'nightwatch', gold: 1000, soldiers: 800, x: 300, y: 200, realm_key: myProfile.realm_key, is_bot: true, faction: 'nightwatch' },
+                { id: crypto.randomUUID(), pseudo: 'Night King', house: 'whitewalker', gold: 0, soldiers: 10000, x: 300, y: 50, realm_key: myProfile.realm_key, is_bot: true, faction: 'whitewalker' },
+                { id: crypto.randomUUID(), pseudo: 'Olenna Tyrell', house: 'tyrell', gold: 6000, soldiers: 7000, x: 200, y: 1200, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Balon Greyjoy', house: 'greyjoy', gold: 1500, soldiers: 4000, x: 50, y: 800, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Doran Martell', house: 'martell', gold: 3000, soldiers: 4500, x: 300, y: 1450, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Jon Arryn', house: 'arryn', gold: 2500, soldiers: 3500, x: 500, y: 800, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' },
+                { id: crypto.randomUUID(), pseudo: 'Edmure Tully', house: 'tully', gold: 1800, soldiers: 3000, x: 300, y: 750, realm_key: myProfile.realm_key, is_bot: true, faction: 'noble' }
             ]
 
             console.log('Spawning bots:', bots.length)
@@ -239,15 +237,26 @@ export default function TacticalMap() {
     }
 
     const handleSelectTarget = (player: any) => {
+        if (!player) {
+            setSelectedTarget(null)
+            return
+        }
         if (myProfile && player.id !== myProfile.id) {
             setSelectedTarget(player)
+            // Distance approximation on hex grid
             const d = Math.sqrt(Math.pow(player.x - myProfile.x, 2) + Math.pow(player.y - myProfile.y, 2))
             setDistance(Math.round(d))
         }
     }
 
-    const performAction = async (type: string) => {
-        if (!myProfile || !selectedTarget) return
+    const performAction = async (type: string, target?: Profile) => {
+        const targetProfile = target || selectedTarget
+        if (!myProfile || !targetProfile) return
+
+        // Update selected target if passed directly
+        if (target && target.id !== selectedTarget?.id) {
+            setSelectedTarget(target)
+        }
 
         let message = ""
         let success = true
@@ -258,19 +267,23 @@ export default function TacticalMap() {
             switch (type) {
                 case 'siege':
                     // Night Watch protection logic: Cannot attack lords unless rebelled
-                    if (myProfile.house === 'nightwatch' && !myProfile.is_rebel && selectedTarget.faction === 'noble') {
+                    if (myProfile.house === 'nightwatch' && !myProfile.is_rebel && targetProfile.faction === 'noble') {
                         message = "La Garde de Nuit ne prend pas part aux guerres des Seigneurs. Rebellez-vous d'abord !"
                         success = false
                         break
                     }
 
-                    message = `Vous marchez sur les terres de ${selectedTarget.pseudo}...`
+                    message = `Vous marchez sur les terres de ${targetProfile.pseudo}...`
+
+                    // Simple distance calc based on coordinates
+                    const dist = Math.sqrt(Math.pow(targetProfile.x - myProfile.x, 2) + Math.pow(targetProfile.y - myProfile.y, 2))
                     const eta = new Date()
-                    eta.setMinutes(eta.getMinutes() + (distance || 0) * 2)
+                    eta.setMinutes(eta.getMinutes() + Math.ceil(dist / 50)) // 1 min per 50 units
+
                     await supabase.from('conflicts').insert({
                         attacker_id: myProfile.id,
-                        defender_id: selectedTarget.id,
-                        title: `${myProfile.house === 'nightwatch' ? 'Expédition' : 'Siège'} de ${selectedTarget.pseudo}`,
+                        defender_id: targetProfile.id,
+                        title: `${myProfile.house === 'nightwatch' ? 'Expédition' : 'Siège'} de ${targetProfile.pseudo}`,
                         eta_arrival: eta.toISOString(),
                         status: 'marching'
                     })
@@ -282,16 +295,16 @@ export default function TacticalMap() {
                         success = false
                     } else {
                         // Direct DB: Pay 500 gold to reduce target soldiers by 20%
-                        const reduction = Math.floor(selectedTarget.soldiers * 0.2)
+                        const reduction = Math.floor(targetProfile.soldiers * 0.2)
                         await supabase.from('profiles').update({
                             gold: myProfile.gold - 500
                         }).eq('id', myProfile.id)
 
                         await supabase.from('profiles').update({
-                            soldiers: Math.max(0, selectedTarget.soldiers - reduction)
-                        }).eq('id', selectedTarget.id)
+                            soldiers: Math.max(0, targetProfile.soldiers - reduction)
+                        }).eq('id', targetProfile.id)
 
-                        message = `Vos pièces dorées ont convaincu ${reduction} gardes de ${selectedTarget.pseudo} de déserter.`
+                        message = `Vos pièces dorées ont convaincu ${reduction} gardes de ${targetProfile.pseudo} de déserter.`
                     }
                     break
 
@@ -305,10 +318,10 @@ export default function TacticalMap() {
                         }).eq('id', myProfile.id)
 
                         await supabase.from('profiles').update({
-                            gold: Math.max(0, selectedTarget.gold - stolen)
-                        }).eq('id', selectedTarget.id)
+                            gold: Math.max(0, targetProfile.gold - stolen)
+                        }).eq('id', targetProfile.id)
 
-                        message = `Vos espions ont dérobé ${stolen} dragons d'or à ${selectedTarget.pseudo} !`
+                        message = `Vos espions ont dérobé ${stolen} dragons d'or à ${targetProfile.pseudo} !`
                     } else {
                         message = `Vos espions ont été capturés et exécutés à Port-Réal.`
                     }
@@ -318,10 +331,10 @@ export default function TacticalMap() {
                     // Send a special alliance message
                     await supabase.from('messages').insert({
                         sender_id: myProfile.id,
-                        content: `📢 [DIPLOMATIE] La Maison ${myProfile.house} propose un pacte d'union à la Maison ${selectedTarget.house}.`,
+                        content: `📢 [DIPLOMATIE] La Maison ${myProfile.house} propose un pacte d'union à la Maison ${targetProfile.house}.`,
                         channel: 'public'
                     })
-                    message = `Un corbeau portant une proposition d'union a été envoyé à ${selectedTarget.pseudo}.`
+                    message = `Un corbeau portant une proposition d'union a été envoyé à ${targetProfile.pseudo}.`
                     break
             }
 
@@ -343,11 +356,9 @@ export default function TacticalMap() {
                 <MapComponent
                     players={players}
                     myProfile={myProfile}
+                    onAction={performAction}
                     selectedTarget={selectedTarget}
-                    setSelectedTarget={setSelectedTarget}
-                    handleSelectTarget={handleSelectTarget}
-                    performAction={performAction}
-                    distance={distance}
+                    setSelectedTarget={handleSelectTarget}
                 />
             </div>
 

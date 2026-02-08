@@ -1,26 +1,15 @@
 "use client"
 
-import { useEffect } from "react"
-import { MapContainer, ImageOverlay, Marker, Popup } from "react-leaflet"
+import React, { useEffect, useState, useMemo } from "react"
+import { MapContainer, useMap, Polygon, Tooltip } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
-import { motion } from "framer-motion"
-import { Sword, X, Ban, Eye, Heart } from "lucide-react"
-
-// Fix for default Leaflet markers
-const DefaultIcon = L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-})
-L.Marker.prototype.options.icon = DefaultIcon
-
+import { motion, AnimatePresence } from "framer-motion"
+import { Sword, Ban, Eye, Heart, X, Crown, Castle, Shield } from "lucide-react"
 import { HOUSES, getHouse } from "@/lib/gameData"
+import { HEX_SIZE, HEX_WIDTH, HEX_HEIGHT, getHexColor } from "@/lib/hexGrid"
 
-const WESTEROS_MAP_URL = "/westeros.webp"
-const BOUNDS: L.LatLngBoundsExpression = [[0, 0], [1000, 800]]
-
+// --- Types ---
 interface Profile {
     id: string
     pseudo: string
@@ -33,192 +22,253 @@ interface Profile {
     is_bot?: boolean
     faction?: 'noble' | 'nightwatch' | 'whitewalker'
     is_rebel?: boolean
+    is_monarch?: boolean
+    is_banker?: boolean
+    debt?: number
+    last_tax_paid?: string
 }
 
-interface MapComponentProps {
-    players: Profile[]
-    myProfile: Profile | null
-    selectedTarget: Profile | null
-    setSelectedTarget: (target: Profile | null) => void
-    handleSelectTarget: (player: Profile) => void
-    performAction: (type: string) => void
-    distance: number | null
+interface HexTile {
+    q: number
+    r: number
+    x: number // Map pixel X
+    y: number // Map pixel Y
+    type: 'land' | 'water' | 'mountain' | 'forest' | 'snow' | 'castle'
+    region: string
+    ownerId?: string // Qui contrôle cette tuile
 }
 
-export default function MapComponent({
+// --- Generator Helper ---
+function generateHexGrid(width: number, height: number): HexTile[] {
+    const tiles: HexTile[] = []
+    for (let r = 0; r < height; r++) {
+        for (let q = 0; q < width; q++) {
+            // Offset coordinates to pixel
+            // Using "Pointy topped" hexes
+            const x = HEX_SIZE * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r)
+            const y = HEX_SIZE * (3 / 2 * r)
+
+            // Simple Logic for Westeros Shape
+            let type: HexTile['type'] = 'water'
+            let region = 'Narrow Sea'
+
+            // Forme approximative de Westeros (très simplifiée)
+            // On utilise des coordonnées (q, r) pour définir la terre
+            const isLand = (q > 3 && q < 12) && (r > 2 && r < 38)
+
+            if (isLand) {
+                if (r < 10) { type = 'snow'; region = 'North' }
+                else if (r < 15) { type = 'forest'; region = 'Riverlands' }
+                else if (r < 20) { type = 'mountain'; region = 'Westerlands' }
+                else if (r < 28) { type = 'land'; region = 'Reach' }
+                else { type = 'land'; region = 'Dorne' }
+            }
+
+            // Random variation
+            if (type !== 'water' && Math.random() > 0.85) type = 'mountain'
+            if (type === 'land' && Math.random() > 0.7) type = 'forest'
+
+            tiles.push({ q, r, x, y, type, region })
+        }
+    }
+    return tiles
+}
+
+// --- Components ---
+
+export default function InteractiveMap({
     players,
     myProfile,
+    onAction,
     selectedTarget,
-    setSelectedTarget,
-    handleSelectTarget,
-    performAction,
-    distance
-}: MapComponentProps) {
-    // Force map resize to ensure tiles load correctly
+    setSelectedTarget
+}: {
+    players: Profile[]
+    myProfile: Profile | null
+    onAction: (type: string, target?: Profile) => void
+    selectedTarget: Profile | null
+    setSelectedTarget: (p: Profile | null) => void
+}) {
+    // Generate static grid once
+    const tiles = useMemo(() => generateHexGrid(15, 40), [])
+
+    const handleHexClick = (tile: HexTile, owner?: Profile) => {
+        if (owner) {
+            setSelectedTarget(owner)
+        } else {
+            console.log("Clicked empty tile:", tile.region)
+        }
+    }
+
+    return (
+        <div className="relative w-full h-full bg-[#1a2b3c] overflow-hidden">
+            {/* Note: Leaflet Coordinate System is tricky. 
+                 We use CRS.Simple for game coordinates.
+                 Leaflet maps [y, x] to [lat, lng].
+             */}
+            <MapContainer
+                center={[500, 250]}
+                zoom={-1}
+                className="w-full h-full bg-[#1a2b3c]"
+                crs={L.CRS.Simple}
+                minZoom={-2}
+                maxZoom={2}
+                scrollWheelZoom={true}
+                doubleClickZoom={false}
+                zoomControl={false}
+            >
+                <CustomHexLayer tiles={tiles} players={players} onHexClick={handleHexClick} />
+            </MapContainer>
+
+            {/* Kingdom Sheet (UI Overlay) */}
+            <AnimatePresence>
+                {selectedTarget && (
+                    <motion.div
+                        initial={{ y: 200 }}
+                        animate={{ y: 0 }}
+                        exit={{ y: 200 }}
+                        className="absolute bottom-16 left-4 right-4 z-[1000]"
+                    >
+                        {(() => {
+                            const house = getHouse(selectedTarget.house.toLowerCase())
+                            const isWW = selectedTarget.faction === 'whitewalker'
+                            const isMe = selectedTarget.id === myProfile?.id
+
+                            return (
+                                <div className="glass p-0 overflow-hidden border-[#B1976B] border rounded-lg shadow-2xl bg-black/95">
+                                    <div className="relative h-20 overflow-hidden bg-cover bg-center" style={{ backgroundColor: house?.color || '#333' }}>
+                                        <div className="absolute top-2 right-2">
+                                            <button onClick={() => setSelectedTarget(null)}><X className="text-white w-5 h-5" /></button>
+                                        </div>
+                                        <div className="absolute bottom-2 left-4 flex gap-3 items-end">
+                                            <div className="text-4xl shadow-xl filter drop-shadow user-select-none">{house?.icon || '🛡️'}</div>
+                                            <div>
+                                                <div className="text-[10px] uppercase text-gray-400 tracking-widest">{selectedTarget.pseudo}</div>
+                                                <div className="text-xl font-serif text-[#B1976B] uppercase">{house?.name || selectedTarget.house}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <div className="text-[9px] uppercase text-gray-500">Puissance</div>
+                                            <div className="text-sm font-bold text-white flex items-center gap-1">
+                                                <Sword className="w-3 h-3 text-gray-400" /> {selectedTarget.soldiers} <span className="text-[9px] font-normal text-gray-500">Soldats</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-[9px] uppercase text-gray-500">Richesse</div>
+                                            <div className="text-sm font-bold text-[#B1976B] flex items-center gap-1">
+                                                <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500" /> {selectedTarget.gold} <span className="text-[9px] font-normal text-gray-500">Or</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {!isMe && (
+                                        <div className="p-2 bg-[#111] grid grid-cols-4 gap-1">
+                                            <ActionButton icon={<Sword />} label="Guerre" color="red" onClick={() => onAction('siege', selectedTarget)} />
+                                            <ActionButton icon={<Ban />} label="Corruption" color="yellow" onClick={() => onAction('bribe', selectedTarget)} />
+                                            <ActionButton icon={<Eye />} label="Espion" color="purple" onClick={() => onAction('infiltrate', selectedTarget)} />
+                                            <ActionButton icon={<Heart />} label="Alliance" color="pink" onClick={() => onAction('marriage', selectedTarget)} />
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })()}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    )
+}
+
+function ActionButton({ icon, label, color, onClick }: any) {
+    const colors: any = {
+        red: 'text-red-500 border-red-900/40 hover:bg-red-900/20',
+        yellow: 'text-yellow-500 border-yellow-900/40 hover:bg-yellow-900/20',
+        purple: 'text-purple-500 border-purple-900/40 hover:bg-purple-900/20',
+        pink: 'text-pink-500 border-pink-900/40 hover:bg-pink-900/20',
+    }
+    return (
+        <button className={`flex flex-col items-center justify-center p-2 border rounded transition-all ${colors[color]}`} onClick={onClick}>
+            {React.cloneElement(icon, { className: "w-4 h-4 mb-1" })}
+            <span className="text-[7px] uppercase font-bold tracking-wider">{label}</span>
+        </button>
+    )
+}
+
+// Separate component to hook into useMap
+function CustomHexLayer({ tiles, players, onHexClick }: any) {
+    const map = useMap()
+
+    // Initial view set
     useEffect(() => {
-        const timer = setTimeout(() => {
-            window.dispatchEvent(new Event('resize'))
-        }, 500)
-        return () => clearTimeout(timer)
-    }, [])
+        // Center the map roughly on Westeros
+        map.setView([500, 250], -1)
+    }, [map])
 
     return (
         <>
-            <div className="flex-grow relative h-full w-full overflow-hidden">
-                <MapContainer
-                    crs={L.CRS.Simple}
-                    bounds={BOUNDS}
-                    className="h-full w-full z-0"
-                    zoom={2}
-                    minZoom={1}
-                    maxZoom={4}
-                    style={{ height: '100%', width: '100%', background: '#030303' }}
-                >
-                    <ImageOverlay
-                        url={WESTEROS_MAP_URL}
-                        bounds={BOUNDS}
-                        opacity={0.8}
-                    />
+            {tiles.map((tile: HexTile) => {
+                if (tile.type === 'water') return null
 
-                    {players.map((player) => {
-                        const houseData = getHouse(player.house.toLowerCase()) || {
-                            id: 'unknown', name: 'Inconnu', motto: '...', color: '#6d5e46', icon: '🛡️', seat: 'Inconnu', description: 'Une maison mineure.', region: 'Unknown'
-                        }
-                        const isWW = player.faction === 'whitewalker'
+                const angle = Math.PI / 3
+                const size = 18 // Slightly smaller than spacing for gap
+                // Leaflet uses [lat, lng]. In CRS.Simple, it's [y, x].
+                const center = [tile.y, tile.x] as [number, number]
 
-                        return (
-                            <Marker
-                                key={player.id}
-                                position={[player.y, player.x]}
-                                eventHandlers={{ click: () => handleSelectTarget(player) }}
-                                icon={L.divIcon({
-                                    className: 'custom-div-icon',
-                                    html: `<div style="
-                                    background: ${isWW ? '#a5f3fc' : houseData.color};
-                                    width: ${isWW ? '12px' : '16px'}; 
-                                    height: ${isWW ? '12px' : '16px'}; 
-                                    border-radius: 50%; 
-                                    box-shadow: 0 0 10px ${isWW ? '#06b6d4' : houseData.color}; 
-                                    border: 2px solid white;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    font-size: 8px;
-                                ">${isWW ? '' : houseData.icon}</div>`,
-                                    iconSize: [16, 16],
-                                    iconAnchor: [8, 8]
-                                })}
-                            >
-                                <Popup className="custom-popup">
-                                    <div className="text-center p-1">
-                                        <div className={`font-serif uppercase ${isWW ? 'text-cyan-400 animate-pulse' : 'text-[#B1976B]'} ${!isWW && 'gold-text'}`}>
-                                            {player.pseudo} {player.is_bot && <span className="text-[6px] opacity-70">(IA)</span>}
-                                        </div>
-                                        {!isWW && <div className="text-[6px] text-gray-400 uppercase tracking-widest mb-1">{houseData.name}</div>}
-                                        <div className="text-[8px] uppercase tracking-tighter text-gray-500">
-                                            {player.soldiers || 0} {isWW ? 'Spectres ❄️' : 'Épées ⚔️'}
-                                        </div>
-                                        {player.is_rebel && (
-                                            <div className="text-[6px] text-red-500 font-bold uppercase mt-1">Séditieux / Hors-la-loi</div>
-                                        )}
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        )
-                    })}
-                </MapContainer>
-            </div>
-
-            {/* Action Panel */}
-            {selectedTarget && (
-                <motion.div
-                    initial={{ y: 200 }}
-                    animate={{ y: 0 }}
-                    className="absolute bottom-16 left-4 right-4 z-[1000]"
-                >
-                    {(() => {
-                        const house = getHouse(selectedTarget.house.toLowerCase())
-                        const isWW = selectedTarget.faction === 'whitewalker'
-
-                        return (
-                            <div className="glass p-0 overflow-hidden border-[#B1976B] border rounded-lg shadow-2xl bg-black/90">
-                                {/* Header / Banner */}
-                                <div className="relative h-24 overflow-hidden">
-                                    <div className="absolute inset-0 opacity-50" style={{ backgroundColor: house?.color || '#333' }} />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                                    <div className="absolute bottom-3 left-4 flex items-end gap-3">
-                                        <div className="text-4xl filter drop-shadow-lg">{isWW ? '❄️' : house?.icon || '🛡️'}</div>
-                                        <div>
-                                            <div className="text-[10px] text-white/70 uppercase tracking-widest">{isWW ? 'Menace' : `Maison ${house?.name || selectedTarget.house}`}</div>
-                                            <h2 className="text-2xl font-serif text-white uppercase leading-none tracking-wide text-shadow-sm">{selectedTarget.pseudo}</h2>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => setSelectedTarget(null)} className="absolute top-2 right-2 text-white/50 hover:text-white p-2 bg-black/20 rounded-full"><X className="w-4 h-4" /></button>
-                                </div>
-
-                                {/* Stats & Info */}
-                                <div className="p-4 grid grid-cols-2 gap-4 border-b border-white/10">
-                                    <div className="space-y-1">
-                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Devise</div>
-                                        <div className="text-xs text-[#B1976B] italic font-serif">"{house?.motto || 'L\'Hiver Vient...'}"</div>
-                                    </div>
-                                    <div className="space-y-1 text-right">
-                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Forces</div>
-                                        <div className="text-xs text-white font-bold">{selectedTarget.soldiers || 0} <span className="text-gray-500 font-normal">{isWW ? 'Spectres' : 'Hommes'}</span></div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Siège</div>
-                                        <div className="text-xs text-gray-300">{house?.seat || 'Inconnu'}</div>
-                                    </div>
-                                    <div className="space-y-1 text-right">
-                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Trésor</div>
-                                        <div className="text-xs text-[#B1976B]">{selectedTarget.gold || 0} <span className="text-[8px]">Dragons d'Or</span></div>
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="p-3 bg-[#0A0A0A]">
-                                    <div className="text-[8px] text-gray-600 uppercase tracking-[0.2em] text-center mb-3">Actions Diplomatiques</div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        <button onClick={() => performAction('siege')} className="group flex flex-col items-center justify-center p-3 rounded bg-red-900/10 border border-red-900/30 hover:bg-red-900/30 transition-all">
-                                            <Sword className="w-5 h-5 text-red-500 mb-1 group-hover:scale-110 transition-transform" />
-                                            <span className="text-[7px] uppercase font-bold text-red-400 group-hover:text-red-300">Guerre</span>
-                                        </button>
-                                        <button onClick={() => performAction('bribe')} className="group flex flex-col items-center justify-center p-3 rounded bg-yellow-900/10 border border-yellow-900/30 hover:bg-yellow-900/30 transition-all">
-                                            <Ban className="w-5 h-5 text-yellow-600 mb-1 group-hover:scale-110 transition-transform" />
-                                            <span className="text-[7px] uppercase font-bold text-yellow-500 group-hover:text-yellow-400">Corruption</span>
-                                        </button>
-                                        <button onClick={() => performAction('infiltrate')} className="group flex flex-col items-center justify-center p-3 rounded bg-purple-900/10 border border-purple-900/30 hover:bg-purple-900/30 transition-all">
-                                            <Eye className="w-5 h-5 text-purple-500 mb-1 group-hover:scale-110 transition-transform" />
-                                            <span className="text-[7px] uppercase font-bold text-purple-400 group-hover:text-purple-300">Espionner</span>
-                                        </button>
-                                        <button onClick={() => performAction('marriage')} className="group flex flex-col items-center justify-center p-3 rounded bg-pink-900/10 border border-pink-900/30 hover:bg-pink-900/30 transition-all">
-                                            <Heart className="w-5 h-5 text-pink-500 mb-1 group-hover:scale-110 transition-transform" />
-                                            <span className="text-[7px] uppercase font-bold text-pink-400 group-hover:text-pink-300">Alliance</span>
-                                        </button>
-                                    </div>
-                                    <div className="mt-3 text-center">
-                                        <p className="text-[8px] text-gray-600 uppercase tracking-widest italic">
-                                            Distance: {distance} Lieues | Marche: {Math.round((distance || 0) * 2)} min
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })()}
-                </motion.div>
-            )}
-
-            <style jsx global>{`
-                .leaflet-container { background: #030303 !important; }
-                .custom-popup .leaflet-popup-content-wrapper {
-                    background: #1A1A1A !important;
-                    color: white !important;
-                    border-radius: 0 !important;
-                    border: 1px solid #B1976B !important;
+                const points = []
+                for (let i = 0; i < 6; i++) {
+                    points.push([
+                        center[0] + size * Math.sin(angle * i),
+                        center[1] + size * Math.cos(angle * i)
+                    ])
                 }
-                .custom-popup .leaflet-popup-tip { background: #B1976B !important; }
-            `}</style>
+
+                // Color by Region
+                let fillColor = '#333'
+                if (tile.region === 'North') fillColor = '#bdc3c7' // Gris clair/Neige
+                if (tile.region === 'Riverlands') fillColor = '#2ecc71' // Vert
+                if (tile.region === 'Westerlands') fillColor = '#e74c3c' // Rouge montagne
+                if (tile.region === 'Reach') fillColor = '#f1c40f' // Champs blé
+                if (tile.region === 'Dorne') fillColor = '#e67e22' // Orange désert
+                if (tile.type === 'forest') fillColor = '#27ae60' // Forêt dense
+                if (tile.type === 'mountain') fillColor = '#7f8c8d' // Pierre
+
+                // If a player is ON this tile (approx)
+                const occupant = players.find((p: Profile) => {
+                    const px = p.x || 0
+                    const py = p.y || 0
+                    return Math.abs(px - tile.x) < 40 && Math.abs(py - tile.y) < 40
+                })
+
+                if (occupant) {
+                    fillColor = getHouse(occupant.house.toLowerCase())?.color || '#fff'
+                }
+
+                return (
+                    <Polygon
+                        key={`${tile.q}-${tile.r}`}
+                        positions={points as any}
+                        pathOptions={{
+                            color: '#000',
+                            weight: 1,
+                            fillColor: fillColor,
+                            fillOpacity: occupant ? 0.9 : 0.4
+                        }}
+                        eventHandlers={{
+                            click: () => onHexClick(tile, occupant)
+                        }}
+                    >
+                        {/* Optional Tooltip */}
+                        {occupant && (
+                            <Tooltip direction="center" permanent offset={[0, 0]} opacity={0.9} className="bg-transparent border-none shadow-none">
+                                <span className="font-bold text-white drop-shadow-md text-[10px]">{occupant.house.substring(0, 2)}</span>
+                            </Tooltip>
+                        )}
+                    </Polygon>
+                )
+            })}
         </>
     )
 }
