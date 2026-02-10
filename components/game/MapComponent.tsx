@@ -235,15 +235,32 @@ function CustomHexLayer({ tiles, players, onHexClick }: any) {
                 if (tile.type === 'forest') fillColor = '#27ae60' // Forêt dense
                 if (tile.type === 'mountain') fillColor = '#7f8c8d' // Pierre
 
-                // If a player is ON this tile (approx)
-                const occupant = players.find((p: Profile) => {
+                // --- Dynamic Territory Logic (GOT: Conquest) ---
+                // Calculate influence for each player on this tile
+                let maxInfluence = 0
+                let dominantPlayer: Profile | null = null
+
+                players.forEach((p: Profile) => {
                     const px = p.x || 0
                     const py = p.y || 0
-                    return Math.abs(px - tile.x) < 40 && Math.abs(py - tile.y) < 40
+                    // Distance formula
+                    const dist = Math.sqrt(Math.pow(px - tile.x, 2) + Math.pow(py - tile.y, 2))
+
+                    // Influence = Power / Distance (simplified)
+                    // Every player has a minimum influence radius based on power
+                    const influenceRadius = 100 + (p.soldiers / 50)
+
+                    if (dist < influenceRadius) {
+                        const influence = p.soldiers / (dist + 10)
+                        if (influence > maxInfluence) {
+                            maxInfluence = influence
+                            dominantPlayer = p
+                        }
+                    }
                 })
 
-                if (occupant) {
-                    fillColor = getHouse(occupant.house.toLowerCase())?.color || '#fff'
+                if (dominantPlayer) {
+                    fillColor = getHouse((dominantPlayer as any).house.toLowerCase())?.color || '#fff'
                 }
 
                 return (
@@ -251,19 +268,25 @@ function CustomHexLayer({ tiles, players, onHexClick }: any) {
                         key={`${tile.q}-${tile.r}`}
                         positions={points as any}
                         pathOptions={{
-                            color: '#000',
-                            weight: 1,
+                            color: dominantPlayer ? '#B1976B' : '#000',
+                            weight: dominantPlayer ? 0.5 : 0.2,
                             fillColor: fillColor,
-                            fillOpacity: occupant ? 0.9 : 0.4
+                            fillOpacity: dominantPlayer ? 0.6 : 0.3
                         }}
                         eventHandlers={{
-                            click: () => onHexClick(tile, occupant)
+                            click: () => onHexClick(tile, dominantPlayer)
                         }}
                     >
-                        {/* Optional Tooltip */}
-                        {occupant && (
+                        {dominantPlayer && tile.type === 'castle' && (
                             <Tooltip direction="center" permanent offset={[0, 0]} opacity={0.9} className="bg-transparent border-none shadow-none">
-                                <span className="font-bold text-white drop-shadow-md text-[10px]">{occupant.house.substring(0, 2)}</span>
+                                <div className="flex flex-col items-center pointer-events-none">
+                                    <span className="text-xl filter drop-shadow-lg leading-none">
+                                        {getHouse((dominantPlayer as any).house.toLowerCase())?.icon || '🛡️'}
+                                    </span>
+                                    <span className="font-serif font-black text-[#B1976B] text-[8px] uppercase tracking-tighter bg-black/60 px-1 mt-1 border border-[#B1976B]/30">
+                                        {(dominantPlayer as any).pseudo}
+                                    </span>
+                                </div>
                             </Tooltip>
                         )}
                     </Polygon>

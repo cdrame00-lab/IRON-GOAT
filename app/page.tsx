@@ -27,7 +27,7 @@ export default function Home() {
         </div>
 
         <h1 className="text-5xl md:text-6xl font-serif gold-text tracking-[0.2em] mb-4 uppercase leading-tight">
-          Iron Throne
+          GOT: Conquest
         </h1>
 
         <motion.div

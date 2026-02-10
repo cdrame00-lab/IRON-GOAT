@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { Shield, Compass, MessageSquare, Eye, X, Crown } from "lucide-react"
 import RavensChat from "@/components/game/RavensChat"
 import MonarchyPanel from "@/components/game/MonarchyPanel"
+import GameNavbar from "@/components/layout/GameNavbar"
 
 // We must import Leaflet components dynamically because they require 'window'
 const MapComponent = dynamic(() => import("@/components/game/MapComponent"), {
@@ -486,22 +487,8 @@ export default function TacticalMap() {
                 </div>
             </div>
 
-            {/* Bottom Nav */}
-            <div className="absolute bottom-0 left-0 right-0 z-[999] h-14 bg-[#030303]/90 backdrop-blur-xl border-t border-[#1A1A1A] flex justify-around items-center px-4">
-                <button className="flex flex-col items-center gap-1">
-                    <Compass className="w-5 h-5 text-[#B1976B]" />
-                    <span className="text-[8px] uppercase gold-text opacity-70">Carte</span>
-                </button>
-                <button onClick={() => setIsChatOpen(true)} className="flex flex-col items-center gap-1 relative">
-                    <MessageSquare className="w-5 h-5 text-gray-500 hover:text-white transition-colors" />
-                    <span className="text-[8px] uppercase text-gray-600">Ravens</span>
-                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-pulse" />
-                </button>
-                <button onClick={() => setIsMonarchyOpen(true)} className="flex flex-col items-center gap-1">
-                    <Crown className="w-5 h-5 text-gray-500 hover:text-[#B1976B] transition-colors" />
-                    <span className="text-[8px] uppercase text-gray-600">Trône</span>
-                </button>
-            </div>
+            {/* Bottom Nav Integration */}
+            <GameNavbar />
 
             {/* Monarchy Panel */}
             <MonarchyPanel
